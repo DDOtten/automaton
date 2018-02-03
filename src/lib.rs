@@ -1,10 +1,10 @@
-#![feature(match_default_bindings)]
+#![feature(nll, match_default_bindings)]
 
 pub use deter::Deter;
 pub use non_deter::NonDeter;
 pub use push_down::PushDown;
 
-/// A trait for automatons.
+/// A trait for structs that can accept some inputs and reject others.
 pub trait Automaton {
     /// The type of the input alphabet.
     type Alphabet;

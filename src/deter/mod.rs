@@ -25,18 +25,15 @@ where
     S: Clone + Eq + Hash,
     A: Clone + Eq + Hash,
 {
-    pub fn traverse<I>(&self, input: I, mut state: S) -> S
+    pub fn traverse<I>(&self, input: I, mut state: S) -> Option<S>
     where
         I: Iterator<Item = A>,
     {
         for label in input {
-            state = self.transitions
-                .get(&(state, label))
-                .expect("no transition")
-                .clone();
+            state = self.transitions.get(&(state, label))?.clone();
         }
 
-        state
+        Some(state)
     }
 
     pub fn states(&self) -> Set<S> {
@@ -84,12 +81,18 @@ where
         labels
     }
 
-    pub fn similar(&self) -> Set<(S, S)> {
+    pub fn partition(&self) -> Map<S, usize> {
+        Map::new()
+    }
+
+    pub fn minimal(&self) -> Deter<usize, A> {
         let labels = self.labels();
         let reachable_states = self.reachable_states();
 
         let mut similar = Map::new();
 
+        // We create all the unique pairs of states and mark them similar if and only if
+        // they are both accepting or both not accepting.
         let mut iter1 = reachable_states.iter();
         while let Some(state1) = iter1.next() {
             let mut iter2 = iter1.clone();
@@ -101,6 +104,8 @@ where
             }
         }
 
+        // We mark states not similar if there is a label where the resuling states are not similar.
+        // We keep repeating this while we have made a change in the last iteration.
         let mut changed = true;
         while changed {
             changed = false;
@@ -112,20 +117,18 @@ where
                     // If the states are marked similar.
                     if similar.get(&(from1.clone(), from2.clone())) == Some(&true) {
                         for label in labels.iter() {
-                            let to1 = self.transitions
-                                .get(&(from1.clone(), label.clone()))
-                                .expect("no transition");
-                            let to2 = self.transitions
-                                .get(&(from2.clone(), label.clone()))
-                                .expect("no transition");
-
-                            // If we can reach to states that ere not marked similar.
-                            if similar.get(&(to1.clone(), to2.clone())) == Some(&false)
-                                || similar.get(&(to2.clone(), to1.clone())) == Some(&false)
-                            {
-                                similar.insert((from1.clone(), from2.clone()), false);
-                                changed = true;
-                                break;
+                            if let (Some(to1), Some(to2)) = (
+                                self.transitions.get(&(from1.clone(), label.clone())),
+                                self.transitions.get(&(from2.clone(), label.clone())),
+                            ) {
+                                // If we can reach states that are not marked similar.
+                                if similar.get(&(to1.clone(), to2.clone())) == Some(&false)
+                                    || similar.get(&(to2.clone(), to1.clone())) == Some(&false)
+                                {
+                                    similar.insert((from1.clone(), from2.clone()), false);
+                                    changed = true;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -133,59 +136,46 @@ where
             }
         }
 
-        let mut pairs = Set::new();
+        let mut partition: Map<S, usize> = Map::new();
 
-        similar.into_iter().for_each(|((state1, state2), simular)| {
-            if simular {
-                pairs.insert((state1, state2));
-            }
-        });
+        let mut max = 0;
 
-        pairs
-    }
+        'outer: for higher_state in reachable_states.iter() {
+            partition.insert(higher_state.clone(), {
+                let mut ret = max;
 
-    pub fn minimal(&self) -> Deter<S, A> {
-        let reachable_states = self.reachable_states();
-        let similar = self.similar();
-
-        let mut minimal_states = Set::new();
-        minimal_states.insert(self.initial.clone());
-
-        'outer: for state in reachable_states.iter() {
-            for (state1, state2) in similar.iter() {
-                if (state == state1 && minimal_states.get(state2) == None)
-                    || (state == state2 && minimal_states.get(state1) == None)
-                {
-                    continue 'outer;
+                for lower_state in reachable_states.iter() {
+                    if lower_state == higher_state {
+                        max += 1;
+                        break;
+                    } else if similar.get(&(lower_state.clone(), higher_state.clone()))
+                        == Some(&true)
+                    {
+                        let value = partition.get(lower_state).unwrap().clone();
+                        ret = value;
+                        break;
+                    }
                 }
-            }
 
-            minimal_states.insert(state.clone());
+                ret
+            });
         }
 
-        let mut minimal = Deter {
-            initial: self.initial.clone(),
-            accepting: &self.accepting & &minimal_states,
-            transitions: Map::new(),
-        };
-
-        'outer: for ((from, label), to) in self.transitions.iter() {
-            for (state1, state2) in similar.iter() {
-                if from == state1 && minimal_states.get(state2) == None {
-                    minimal
-                        .transitions
-                        .insert((state2.clone(), label.clone()), to.clone());
-                    continue 'outer;
-                } else if from == state2 && minimal_states.get(state1) == None {
-                    minimal
-                        .transitions
-                        .insert((state1.clone(), label.clone()), to.clone());
-                    continue 'outer;
-                }
-            }
+        Deter {
+            initial: *partition.get(&self.initial).unwrap(),
+            accepting: self.accepting
+                .iter()
+                .filter_map(|state| {
+                    partition.get(state).cloned()
+                })
+                .collect(),
+            transitions: self.transitions
+                .iter()
+                .filter_map(|((from, label), to)| {
+                    Some(((*partition.get(from)?, label.clone()), *partition.get(to)?))
+                })
+                .collect(),
         }
-
-        minimal
     }
 
     pub fn complement(&self) -> Deter<S, A> {
@@ -323,7 +313,11 @@ where
     where
         I: Iterator<Item = A>,
     {
-        self.accepting.get(&self.traverse(input, self.initial.clone())) != None
+        if let Some(state) = self.traverse(input, self.initial.clone()) {
+            self.accepting.get(&state) != None
+        } else {
+            false
+        }
     }
 }
 

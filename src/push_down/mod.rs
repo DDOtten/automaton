@@ -1,6 +1,5 @@
 use std::collections::{HashMap as Map, HashSet as Set};
 use std::hash::Hash;
-use std::iter::once;
 
 use Automaton;
 
