@@ -11,8 +11,8 @@ where
     S: Clone + Eq + Hash,
     A: Clone + Eq + Hash,
 {
-    pub initial: Set<S>,
-    pub accepting: Set<S>,
+    pub initial_states: Set<S>,
+    pub accepting_states: Set<S>,
     pub transitions: Map<(S, Option<A>), Set<S>>,
 }
 
@@ -45,8 +45,8 @@ where
     pub fn states(&self) -> Set<S> {
         let mut states = Set::new();
 
-        states.extend(self.initial.iter().cloned());
-        states.extend(self.accepting.iter().cloned());
+        states.extend(self.initial_states.iter().cloned());
+        states.extend(self.accepting_states.iter().cloned());
 
         for ((from, _label), to) in self.transitions.iter() {
             states.insert(from.clone());
@@ -59,9 +59,9 @@ where
     pub fn reachable_states(&self) -> Set<S> {
         let labels = self.labels();
 
-        let mut reachable_states = self.initial.clone();
+        let mut reachable_states = self.initial_states.clone();
 
-        let mut not_checked: Vec<S> = self.initial.iter().cloned().collect();
+        let mut not_checked: Vec<S> = self.initial_states.iter().cloned().collect();
         while let Some(from) = not_checked.pop() {
             for label in labels.iter() {
                 let mut states = Set::new();
@@ -97,10 +97,10 @@ where
     where
         I: Iterator<Item = A>,
     {
-        let states = self.traverse(input, self.initial.clone());
+        let states = self.traverse(input, self.initial_states.clone());
 
         for state in states.iter() {
-            if self.accepting.get(state) != None {
+            if self.accepting_states.get(state) != None {
                 return true;
             }
         }
@@ -146,8 +146,8 @@ where
 
     pub fn eliminate_lambda(&self) -> NonDeter<S, A> {
         let mut no_lambda = NonDeter {
-            initial: self.initial.clone(),
-            accepting: self.accepting.clone(),
+            initial_states: self.initial_states.clone(),
+            accepting_states: self.accepting_states.clone(),
             transitions: Map::new(),
         };
 
@@ -175,17 +175,17 @@ where
         let labels = without_lambda.labels();
 
         let mut deter = Deter {
-            initial: subset_as_usize(&states, &without_lambda.initial.clone()),
-            accepting: Set::new(),
+            initial_state: subset_as_usize(&states, &without_lambda.initial_states.clone()),
+            accepting_states: Set::new(),
             transitions: Map::new(),
         };
 
         // The states of deter.
         let mut deter_states = Set::new();
-        deter_states.insert(deter.initial);
+        deter_states.insert(deter.initial_state);
 
         // We make a stack of sets of states that we have not covered.
-        let mut not_checked = vec![without_lambda.initial.clone()];
+        let mut not_checked = vec![without_lambda.initial_states.clone()];
         while let Some(from) = not_checked.pop() {
             let deter_from = subset_as_usize(&states, &from);
 
@@ -206,13 +206,14 @@ where
             }
         }
 
-        // A set is accepting if its intersection with the accepting states is not empty.
-        // We calculate the usize of the set of accepting states.
-        let accepting_mask = subset_as_usize(&states, &without_lambda.accepting.clone());
+        // A set is accepting_states if its intersection with the accepting_states states is not empty.
+        // We calculate the usize of the set of accepting_states states.
+        let accepting_states_mask =
+            subset_as_usize(&states, &without_lambda.accepting_states.clone());
 
         for state in deter_states.into_iter() {
-            if state & accepting_mask != 0 {
-                deter.accepting.insert(state);
+            if state & accepting_states_mask != 0 {
+                deter.accepting_states.insert(state);
             }
         }
 
@@ -223,7 +224,7 @@ where
     where
         T: Clone + Eq + Hash,
     {
-        let initial = product(&self.initial, &other.initial);
+        let initial_states = product(&self.initial_states, &other.initial_states);
 
         let mut transitions = Map::new();
         for ((self_from, self_label), self_to) in self.transitions.iter() {
@@ -238,8 +239,8 @@ where
         }
 
         NonDeter {
-            initial,
-            accepting: Set::new(),
+            initial_states,
+            accepting_states: Set::new(),
             transitions,
         }
     }
@@ -250,17 +251,17 @@ where
     {
         let mut automaton = NonDeter::combine(&self, &other);
 
-        for self_state in self.accepting.iter() {
+        for self_state in self.accepting_states.iter() {
             for other_state in other.states() {
                 automaton
-                    .accepting
+                    .accepting_states
                     .insert((self_state.clone(), other_state.clone()));
             }
         }
-        for other_state in other.accepting.iter() {
+        for other_state in other.accepting_states.iter() {
             for self_state in self.states() {
                 automaton
-                    .accepting
+                    .accepting_states
                     .insert((self_state.clone(), other_state.clone()));
             }
         }
@@ -274,10 +275,10 @@ where
     {
         let mut automaton = NonDeter::combine(&self, &other);
 
-        for self_state in self.accepting.iter() {
-            for other_state in other.accepting.iter() {
+        for self_state in self.accepting_states.iter() {
+            for other_state in other.accepting_states.iter() {
                 automaton
-                    .accepting
+                    .accepting_states
                     .insert((self_state.clone(), other_state.clone()));
             }
         }
@@ -291,11 +292,11 @@ where
     {
         let mut automaton = NonDeter::combine(&self, &other);
 
-        for self_state in self.accepting.iter() {
+        for self_state in self.accepting_states.iter() {
             for other_state in other.states() {
-                if other.accepting.get(&other_state) == None {
+                if other.accepting_states.get(&other_state) == None {
                     automaton
-                        .accepting
+                        .accepting_states
                         .insert((self_state.clone(), other_state.clone()));
                 }
             }
@@ -311,25 +312,25 @@ where
         let mut automaton = NonDeter::combine(&self, &other);
 
         let mut union = Set::new();
-        for self_state in self.accepting.iter() {
+        for self_state in self.accepting_states.iter() {
             for other_state in other.states() {
                 union.insert((self_state.clone(), other_state.clone()));
             }
         }
-        for other_state in other.accepting.iter() {
+        for other_state in other.accepting_states.iter() {
             for self_state in self.states() {
                 union.insert((self_state.clone(), other_state.clone()));
             }
         }
 
         let mut intersection = Set::new();
-        for self_state in self.accepting.iter() {
-            for other_state in other.accepting.iter() {
+        for self_state in self.accepting_states.iter() {
+            for other_state in other.accepting_states.iter() {
                 intersection.insert((self_state.clone(), other_state.clone()));
             }
         }
 
-        automaton.accepting = &union - &intersection;
+        automaton.accepting_states = &union - &intersection;
 
         automaton
     }
@@ -379,10 +380,10 @@ where
     where
         I: Iterator<Item = A>,
     {
-        let states = self.traverse(input, self.initial.clone());
+        let states = self.traverse(input, self.initial_states.clone());
 
         for state in states.iter() {
-            if self.accepting.get(state) != None {
+            if self.accepting_states.get(state) != None {
                 return true;
             }
         }

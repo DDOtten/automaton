@@ -4,19 +4,19 @@ use std::hash::Hash;
 use Automaton;
 
 #[derive(Clone)]
-pub struct PushDown<S, A, G>
+pub struct NonDeterPushDown<S, A, G>
 where
     S: Clone + Eq + Hash,
     A: Clone + Eq + Hash,
     G: Clone + Eq + Hash,
 {
-    pub initial: Set<S>,
-    pub accepting: Set<S>,
-    pub start: G,
+    pub initial_states: Set<S>,
+    pub initial_stack: Vec<G>,
+    pub accepting_states: Set<S>,
     pub transitions: Map<(S, Option<A>, Option<G>), Set<(S, Vec<G>)>>,
 }
 
-impl<S, A, G> PushDown<S, A, G>
+impl<S, A, G> NonDeterPushDown<S, A, G>
 where
     S: Clone + Eq + Hash,
     A: Clone + Eq + Hash,
@@ -32,11 +32,14 @@ where
             let mut new_states = Set::new();
 
             for (from, stack) in states.into_iter() {
-                if let Some(to) =
-                    self.transitions
-                        .get(&(from, Some(label.clone()), stack.last().cloned()))
+                let mut stack = stack.clone();
+                if let Some(to) = self.transitions
+                    .get(&(from, Some(label.clone()), stack.pop()))
                 {
-                    new_states.extend(to.iter().cloned());
+                    new_states.extend(to.iter().map(|(new_state, new_stack)| {
+                        stack.extend_from_slice(new_stack);
+                        (new_state.clone(), stack.clone())
+                    }));
                 }
             }
 
@@ -49,8 +52,8 @@ where
     pub fn states(&self) -> Set<S> {
         let mut states = Set::new();
 
-        states.extend(self.initial.iter().cloned());
-        states.extend(self.accepting.iter().cloned());
+        states.extend(self.initial_states.iter().cloned());
+        states.extend(self.accepting_states.iter().cloned());
 
         for ((from, _label, _top), to) in self.transitions.iter() {
             states.insert(from.clone());
@@ -88,12 +91,11 @@ where
     where
         I: Iterator<Item = A>,
     {
-        let start = vec![self.start.clone()];
         let states = self.traverse(
             input,
-            self.initial
+            self.initial_states
                 .iter()
-                .map(|state| (state.clone(), start.clone()))
+                .map(|state| (state.clone(), self.initial_stack.clone()))
                 .collect(),
         );
 
@@ -126,7 +128,7 @@ where
     }
 }
 
-impl<S, A, G> Automaton for PushDown<S, A, G>
+impl<S, A, G> Automaton for NonDeterPushDown<S, A, G>
 where
     S: Clone + Eq + Hash,
     A: Clone + Eq + Hash,
@@ -138,17 +140,16 @@ where
     where
         I: Iterator<Item = A>,
     {
-        let start = vec![self.start.clone()];
         let states = self.traverse(
             input,
-            self.initial
+            self.initial_states
                 .iter()
-                .map(|state| (state.clone(), start.clone()))
+                .map(|state| (state.clone(), self.initial_stack.clone()))
                 .collect(),
         );
 
         for (state, _stack) in states.iter() {
-            if self.accepting.get(state) != None {
+            if self.accepting_states.get(state) != None {
                 return true;
             }
         }

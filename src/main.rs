@@ -4,6 +4,4 @@ extern crate automaton;
 
 use automaton::{Automaton, Deter, NonDeter};
 
-fn main() {
-    
-}
+fn main() {}

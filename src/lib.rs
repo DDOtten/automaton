@@ -1,8 +1,9 @@
 #![feature(nll, match_default_bindings)]
 
 pub use deter::Deter;
+pub use deter_push_down::DeterPushDown;
 pub use non_deter::NonDeter;
-pub use push_down::PushDown;
+pub use non_deter_push_down::NonDeterPushDown;
 
 /// A trait for structs that can accept some inputs and reject others.
 pub trait Automaton {
@@ -16,8 +17,9 @@ pub trait Automaton {
 }
 
 mod deter;
+mod deter_push_down;
 mod non_deter;
-mod push_down;
+mod non_deter_push_down;
 
 #[cfg(test)]
 mod tests {
