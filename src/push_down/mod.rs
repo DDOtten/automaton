@@ -1,5 +1,6 @@
 use std::collections::{HashMap as Map, HashSet as Set};
 use std::hash::Hash;
+use std::iter::once;
 
 use Automaton;
 
@@ -22,28 +23,16 @@ where
     A: Clone + Eq + Hash,
     G: Clone + Eq + Hash,
 {
-    pub fn traverse<I>(&self, input: I, mut states: Set<(S, Vec<G>)>) -> Set<(S, Vec<G>)>
-    where
-        I: Iterator<Item = A>,
-    {
-        states = self.lambda_closure(states);
+    pub fn symbols(&self) -> Set<G> {
+        let mut symbols = Set::new();
 
-        for label in input {
-            let mut new_states = Set::new();
-
-            for (from, stack) in states.into_iter() {
-                if let Some(to) =
-                    self.transitions
-                        .get(&(from, Some(label.clone()), stack.last().cloned()))
-                {
-                    new_states.extend(to.iter().cloned());
-                }
+        for ((_from, _label, top), _to) in self.transitions.iter() {
+            if let Some(top) = top {
+                symbols.insert(top.clone());
             }
-
-            states = self.lambda_closure(new_states);
         }
 
-        states
+        symbols
     }
 
     pub fn accepts_empty_stack<I>(&self, input: I) -> bool
@@ -97,6 +86,8 @@ where
     type State = S;
     type Alphabet = A;
 
+    type Situation = Set<(S, Vec<G>)>;
+
     fn accepts<I>(&self, input: I) -> bool
     where
         I: Iterator<Item = A>,
@@ -119,6 +110,30 @@ where
         false
     }
 
+    fn traverse<I>(&self, input: I, mut states: Set<(S, Vec<G>)>) -> Set<(S, Vec<G>)>
+    where
+        I: Iterator<Item = A>,
+    {
+        states = self.lambda_closure(states);
+
+        for label in input {
+            let mut new_states = Set::new();
+
+            for (from, stack) in states.into_iter() {
+                if let Some(to) =
+                    self.transitions
+                        .get(&(from, Some(label.clone()), stack.last().cloned()))
+                {
+                    new_states.extend(to.iter().cloned());
+                }
+            }
+
+            states = self.lambda_closure(new_states);
+        }
+
+        states
+    }
+
     fn states(&self) -> Set<S> {
         let mut states = Set::new();
 
@@ -131,6 +146,35 @@ where
         }
 
         states
+    }
+
+    fn reachable_states(&self) -> Set<S> {
+        let labels = self.labels();
+
+        let start = vec![self.start.clone()];
+        let mut reachable_states: Set<_> = self.initial
+            .iter()
+            .map(|state| (state.clone(), start.clone()))
+            .collect();
+
+        let mut not_checked: Vec<(S, Vec<G>)> = reachable_states.iter().cloned().collect();
+        while let Some(from) = not_checked.pop() {
+            for label in labels.iter() {
+                let mut states = Set::new();
+                states.insert(from.clone());
+
+                states = self.traverse(once(label.clone()), states);
+
+                for state in states {
+                    if reachable_states.get(&state) == None {
+                        reachable_states.insert(state.clone());
+                        not_checked.push(state);
+                    }
+                }
+            }
+        }
+
+        reachable_states.into_iter().map(|(state, _stack)| state).collect()
     }
 
     fn labels(&self) -> Set<A> {

@@ -25,41 +25,6 @@ where
     S: Clone + Eq + Hash,
     A: Clone + Eq + Hash,
 {
-    pub fn traverse<I>(&self, input: I, mut state: S) -> S
-    where
-        I: Iterator<Item = A>,
-    {
-        for label in input {
-            state = self.transitions
-                .get(&(state, label))
-                .expect("no transition")
-                .clone();
-        }
-
-        state
-    }
-
-    pub fn reachable_states(&self) -> Set<S> {
-        let labels = self.labels();
-
-        let mut reachable_states = Set::new();
-        reachable_states.insert(self.initial.clone());
-
-        let mut not_checked = vec![&self.initial];
-        while let Some(from) = not_checked.pop() {
-            for label in labels.iter() {
-                if let Some(to) = self.transitions.get(&(from.clone(), label.clone())) {
-                    if reachable_states.get(to) == None {
-                        reachable_states.insert(to.clone());
-                        not_checked.push(&to);
-                    }
-                }
-            }
-        }
-
-        reachable_states
-    }
-
     pub fn similar(&self) -> Set<(S, S)> {
         let labels = self.labels();
         let reachable_states = self.reachable_states();
@@ -296,12 +261,27 @@ where
     type State = S;
     type Alphabet = A;
 
+    type Situation = S;
+
     fn accepts<I>(&self, input: I) -> bool
     where
         I: Iterator<Item = A>,
     {
-        self.accepting
-            .get(&self.traverse(input, self.initial.clone())) != None
+        self.accepting.get(&self.traverse(input, self.initial.clone())) != None
+    }
+
+    fn traverse<I>(&self, input: I, mut state: S) -> S
+    where
+        I: Iterator<Item = A>,
+    {
+        for label in input {
+            state = self.transitions
+                .get(&(state, label))
+                .expect("no transition")
+                .clone();
+        }
+
+        state
     }
 
     fn states(&self) -> Set<S> {
@@ -316,6 +296,27 @@ where
         }
 
         states
+    }
+
+    fn reachable_states(&self) -> Set<S> {
+        let labels = self.labels();
+
+        let mut reachable_states = Set::new();
+        reachable_states.insert(self.initial.clone());
+
+        let mut not_checked = vec![&self.initial];
+        while let Some(from) = not_checked.pop() {
+            for label in labels.iter() {
+                if let Some(to) = self.transitions.get(&(from.clone(), label.clone())) {
+                    if reachable_states.get(to) == None {
+                        reachable_states.insert(to.clone());
+                        not_checked.push(to);
+                    }
+                }
+            }
+        }
+
+        reachable_states
     }
 
     fn labels(&self) -> Set<A> {

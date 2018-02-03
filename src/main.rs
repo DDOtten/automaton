@@ -2,7 +2,7 @@
 
 extern crate automaton;
 
-use automaton::{Deter, NonDeter};
+use automaton::{Automaton, Deter, NonDeter};
 
 fn main() {
     let deter = Deter {
