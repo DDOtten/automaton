@@ -1,6 +1,7 @@
 use std::collections::{HashMap as Map, HashSet as Set};
 use std::hash::Hash;
 use std::iter::once;
+use std::ops;
 
 use {Automaton, Deter};
 
@@ -217,6 +218,121 @@ where
 
         deter
     }
+
+    fn combine<T>(&self, other: &NonDeter<T, A>) -> NonDeter<(S, T), A>
+    where
+        T: Clone + Eq + Hash,
+    {
+        let initial = product(&self.initial, &other.initial);
+
+        let mut transitions = Map::new();
+        for ((self_from, self_label), self_to) in self.transitions.iter() {
+            for ((other_from, other_label), other_to) in other.transitions.iter() {
+                if self_label == other_label {
+                    transitions.insert(
+                        ((self_from.clone(), other_from.clone()), self_label.clone()),
+                        product(self_to, other_to),
+                    );
+                }
+            }
+        }
+
+        NonDeter {
+            initial,
+            accepting: Set::new(),
+            transitions,
+        }
+    }
+
+    pub fn union<'a, T>(&'a self, other: &'a NonDeter<T, A>) -> NonDeter<(S, T), A>
+    where
+        T: Clone + Eq + Hash,
+    {
+        let mut automaton = NonDeter::combine(&self, &other);
+
+        for self_state in self.accepting.iter() {
+            for other_state in other.states() {
+                automaton
+                    .accepting
+                    .insert((self_state.clone(), other_state.clone()));
+            }
+        }
+        for other_state in other.accepting.iter() {
+            for self_state in self.states() {
+                automaton
+                    .accepting
+                    .insert((self_state.clone(), other_state.clone()));
+            }
+        }
+
+        automaton
+    }
+
+    pub fn intersection<'a, T>(&'a self, other: &'a NonDeter<T, A>) -> NonDeter<(S, T), A>
+    where
+        T: Clone + Eq + Hash,
+    {
+        let mut automaton = NonDeter::combine(&self, &other);
+
+        for self_state in self.accepting.iter() {
+            for other_state in other.accepting.iter() {
+                automaton
+                    .accepting
+                    .insert((self_state.clone(), other_state.clone()));
+            }
+        }
+
+        automaton
+    }
+
+    pub fn difference<'a, T>(&'a self, other: &'a NonDeter<T, A>) -> NonDeter<(S, T), A>
+    where
+        T: Clone + Eq + Hash,
+    {
+        let mut automaton = NonDeter::combine(&self, &other);
+
+        for self_state in self.accepting.iter() {
+            for other_state in other.states() {
+                if other.accepting.get(&other_state) == None {
+                    automaton
+                        .accepting
+                        .insert((self_state.clone(), other_state.clone()));
+                }
+            }
+        }
+
+        automaton
+    }
+
+    pub fn symmetric_difference<'a, T>(&'a self, other: &'a NonDeter<T, A>) -> NonDeter<(S, T), A>
+    where
+        T: Clone + Eq + Hash,
+    {
+        let mut automaton = NonDeter::combine(&self, &other);
+
+        let mut union = Set::new();
+        for self_state in self.accepting.iter() {
+            for other_state in other.states() {
+                union.insert((self_state.clone(), other_state.clone()));
+            }
+        }
+        for other_state in other.accepting.iter() {
+            for self_state in self.states() {
+                union.insert((self_state.clone(), other_state.clone()));
+            }
+        }
+
+        let mut intersection = Set::new();
+        for self_state in self.accepting.iter() {
+            for other_state in other.accepting.iter() {
+                intersection.insert((self_state.clone(), other_state.clone()));
+            }
+        }
+
+        automaton.accepting = &union - &intersection;
+
+        automaton
+    }
 }
 
 fn subset_as_usize<T>(set: &Set<T>, subset: &Set<T>) -> usize
@@ -231,6 +347,22 @@ where
             result += power;
         }
         power <<= 1;
+    }
+
+    result
+}
+
+fn product<T, U>(left_set: &Set<T>, right_set: &Set<U>) -> Set<(T, U)>
+where
+    T: Clone + Eq + Hash,
+    U: Clone + Eq + Hash,
+{
+    let mut result = Set::new();
+
+    for left in left_set.iter() {
+        for right in right_set.iter() {
+            result.insert((left.clone(), right.clone()));
+        }
     }
 
     result
@@ -256,5 +388,57 @@ where
         }
 
         false
+    }
+}
+
+impl<'a, 'b, S, T, A> ops::BitOr<&'b NonDeter<T, A>> for &'a NonDeter<S, A>
+where
+    S: Clone + Eq + Hash,
+    T: Clone + Eq + Hash,
+    A: Clone + Eq + Hash,
+{
+    type Output = NonDeter<(S, T), A>;
+
+    fn bitor(self, rhs: &NonDeter<T, A>) -> NonDeter<(S, T), A> {
+        self.union(rhs)
+    }
+}
+
+impl<'a, 'b, S, T, A> ops::BitAnd<&'b NonDeter<T, A>> for &'a NonDeter<S, A>
+where
+    S: Clone + Eq + Hash,
+    T: Clone + Eq + Hash,
+    A: Clone + Eq + Hash,
+{
+    type Output = NonDeter<(S, T), A>;
+
+    fn bitand(self, rhs: &NonDeter<T, A>) -> NonDeter<(S, T), A> {
+        self.intersection(rhs)
+    }
+}
+
+impl<'a, 'b, S, T, A> ops::BitXor<&'b NonDeter<T, A>> for &'a NonDeter<S, A>
+where
+    S: Clone + Eq + Hash,
+    T: Clone + Eq + Hash,
+    A: Clone + Eq + Hash,
+{
+    type Output = NonDeter<(S, T), A>;
+
+    fn bitxor(self, rhs: &NonDeter<T, A>) -> NonDeter<(S, T), A> {
+        self.symmetric_difference(rhs)
+    }
+}
+
+impl<'a, 'b, S, T, A> ops::Sub<&'b NonDeter<T, A>> for &'a NonDeter<S, A>
+where
+    S: Clone + Eq + Hash,
+    T: Clone + Eq + Hash,
+    A: Clone + Eq + Hash,
+{
+    type Output = NonDeter<(S, T), A>;
+
+    fn sub(self, rhs: &NonDeter<T, A>) -> NonDeter<(S, T), A> {
+        self.difference(rhs)
     }
 }

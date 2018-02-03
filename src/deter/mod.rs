@@ -190,6 +190,8 @@ where
     where
         T: Clone + Eq + Hash,
     {
+        let initial = (self.initial.clone(), other.initial.clone());
+
         let mut transitions = Map::new();
         for ((self_from, self_label), self_to) in self.transitions.iter() {
             for ((other_from, other_label), other_to) in other.transitions.iter() {
@@ -201,8 +203,6 @@ where
                 }
             }
         }
-
-        let initial = (self.initial.clone(), other.initial.clone());
 
         Deter {
             initial,
