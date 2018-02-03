@@ -1,4 +1,4 @@
-use std::collections::{HashSet as Set, HashMap as Map};
+use std::collections::{HashMap as Map, HashSet as Set};
 use std::hash::Hash;
 
 use Automaton;
@@ -32,7 +32,10 @@ where
             let mut new_states = Set::new();
 
             for (from, stack) in states.into_iter() {
-                if let Some(to) = self.transitions.get(&(from, Some(label.clone()), stack.last().cloned())) {
+                if let Some(to) =
+                    self.transitions
+                        .get(&(from, Some(label.clone()), stack.last().cloned()))
+                {
                     new_states.extend(to.iter().cloned());
                 }
             }
@@ -45,25 +48,33 @@ where
 
     pub fn accepts_empty_stack<I>(&self, input: I) -> bool
     where
-        I: Iterator<Item = A>
+        I: Iterator<Item = A>,
     {
         let start = vec![self.start.clone()];
-        let states = self.traverse(input, self.initial.iter().map(|state| (state.clone(), start.clone())).collect());
+        let states = self.traverse(
+            input,
+            self.initial
+                .iter()
+                .map(|state| (state.clone(), start.clone()))
+                .collect(),
+        );
 
         for (_state, stack) in states.iter() {
             if stack.is_empty() {
-                return true
+                return true;
             }
         }
 
         false
     }
 
-    pub fn lambda_closure(&self, mut states: Set<(S, Vec<G>)>,) -> Set<(S, Vec<G>)> {
+    pub fn lambda_closure(&self, mut states: Set<(S, Vec<G>)>) -> Set<(S, Vec<G>)> {
         let mut not_checked: Vec<(S, Vec<G>)> = states.iter().cloned().collect();
 
         while let Some((from, stack)) = not_checked.pop() {
-            if let Some(ref to) = self.transitions.get(&(from.clone(), None, stack.last().cloned())) {
+            if let Some(ref to) = self.transitions
+                .get(&(from.clone(), None, stack.last().cloned()))
+            {
                 for state in to.iter() {
                     if states.get(state) == None {
                         states.insert(state.clone());
@@ -88,14 +99,20 @@ where
 
     fn accepts<I>(&self, input: I) -> bool
     where
-        I: Iterator<Item = A>
+        I: Iterator<Item = A>,
     {
         let start = vec![self.start.clone()];
-        let states = self.traverse(input, self.initial.iter().map(|state| (state.clone(), start.clone())).collect());
+        let states = self.traverse(
+            input,
+            self.initial
+                .iter()
+                .map(|state| (state.clone(), start.clone()))
+                .collect(),
+        );
 
         for (state, _stack) in states.iter() {
             if self.accepting.get(state) != None {
-                return true
+                return true;
             }
         }
 

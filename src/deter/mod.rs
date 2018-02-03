@@ -1,4 +1,4 @@
-use std::collections::{HashSet as Set, HashMap as Map};
+use std::collections::{HashMap as Map, HashSet as Set};
 use std::hash::Hash;
 use std::ops;
 
@@ -30,7 +30,10 @@ where
         I: Iterator<Item = A>,
     {
         for label in input {
-            state = self.transitions.get(&(state, label)).expect("no transition").clone();
+            state = self.transitions
+                .get(&(state, label))
+                .expect("no transition")
+                .clone();
         }
 
         state
@@ -85,13 +88,16 @@ where
                     // If the states are marked similar.
                     if similar.get(&(from1.clone(), from2.clone())) == Some(&true) {
                         for label in labels.iter() {
-                            let to1 = self.transitions.get(&(from1.clone(), label.clone())).expect("no transition");
-                            let to2 = self.transitions.get(&(from2.clone(), label.clone())).expect("no transition");
+                            let to1 = self.transitions
+                                .get(&(from1.clone(), label.clone()))
+                                .expect("no transition");
+                            let to2 = self.transitions
+                                .get(&(from2.clone(), label.clone()))
+                                .expect("no transition");
 
                             // If we can reach to states that ere not marked similar.
-                            if
-                                similar.get(&(to1.clone(), to2.clone())) == Some(&false) ||
-                                similar.get(&(to2.clone(), to1.clone())) == Some(&false)
+                            if similar.get(&(to1.clone(), to2.clone())) == Some(&false)
+                                || similar.get(&(to2.clone(), to1.clone())) == Some(&false)
                             {
                                 similar.insert((from1.clone(), from2.clone()), false);
                                 changed = true;
@@ -105,11 +111,11 @@ where
 
         let mut pairs = Set::new();
 
-        similar.into_iter().for_each(|((state1, state2), simular)|
+        similar.into_iter().for_each(|((state1, state2), simular)| {
             if simular {
                 pairs.insert((state1, state2));
             }
-        );
+        });
 
         pairs
     }
@@ -123,9 +129,8 @@ where
 
         'outer: for state in reachable_states.iter() {
             for (state1, state2) in similar.iter() {
-                if
-                    (state == state1 && minimal_states.get(state2) == None) ||
-                    (state == state2 && minimal_states.get(state1) == None)
+                if (state == state1 && minimal_states.get(state2) == None)
+                    || (state == state2 && minimal_states.get(state1) == None)
                 {
                     continue 'outer;
                 }
@@ -143,10 +148,14 @@ where
         'outer: for ((from, label), to) in self.transitions.iter() {
             for (state1, state2) in similar.iter() {
                 if from == state1 && minimal_states.get(state2) == None {
-                    minimal.transitions.insert((state2.clone(), label.clone()), to.clone());
+                    minimal
+                        .transitions
+                        .insert((state2.clone(), label.clone()), to.clone());
                     continue 'outer;
                 } else if from == state2 && minimal_states.get(state1) == None {
-                    minimal.transitions.insert((state1.clone(), label.clone()), to.clone());
+                    minimal
+                        .transitions
+                        .insert((state1.clone(), label.clone()), to.clone());
                     continue 'outer;
                 }
             }
@@ -173,7 +182,7 @@ where
                 if self_label == other_label {
                     transitions.insert(
                         ((self_from.clone(), other_from.clone()), self_label.clone()),
-                        (self_to.clone(), other_to.clone())
+                        (self_to.clone(), other_to.clone()),
                     );
                 }
             }
@@ -196,12 +205,16 @@ where
 
         for self_state in self.accepting.iter() {
             for other_state in other.states() {
-                automaton.accepting.insert((self_state.clone(), other_state.clone()));
+                automaton
+                    .accepting
+                    .insert((self_state.clone(), other_state.clone()));
             }
         }
         for other_state in other.accepting.iter() {
             for self_state in self.states() {
-                automaton.accepting.insert((self_state.clone(), other_state.clone()));
+                automaton
+                    .accepting
+                    .insert((self_state.clone(), other_state.clone()));
             }
         }
 
@@ -216,7 +229,9 @@ where
 
         for self_state in self.accepting.iter() {
             for other_state in other.accepting.iter() {
-                automaton.accepting.insert((self_state.clone(), other_state.clone()));
+                automaton
+                    .accepting
+                    .insert((self_state.clone(), other_state.clone()));
             }
         }
 
@@ -232,7 +247,9 @@ where
         for self_state in self.accepting.iter() {
             for other_state in other.states() {
                 if other.accepting.get(&other_state) == None {
-                    automaton.accepting.insert((self_state.clone(), other_state.clone()));
+                    automaton
+                        .accepting
+                        .insert((self_state.clone(), other_state.clone()));
                 }
             }
         }
@@ -283,7 +300,8 @@ where
     where
         I: Iterator<Item = A>,
     {
-        self.accepting.get(&self.traverse(input, self.initial.clone())) != None
+        self.accepting
+            .get(&self.traverse(input, self.initial.clone())) != None
     }
 
     fn states(&self) -> Set<S> {

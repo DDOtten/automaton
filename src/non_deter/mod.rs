@@ -1,4 +1,4 @@
-use std::collections::{HashSet as Set, HashMap as Map};
+use std::collections::{HashMap as Map, HashSet as Set};
 use std::hash::Hash;
 
 use {Automaton, Deter};
@@ -48,7 +48,7 @@ where
 
         for state in states.iter() {
             if self.accepting.get(state) != None {
-                return true
+                return true;
             }
         }
 
@@ -107,7 +107,9 @@ where
 
                 states = self.traverse(once(label.clone()), states);
 
-                no_lambda.transitions.insert((from.clone(), Some(label.clone())), states);
+                no_lambda
+                    .transitions
+                    .insert((from.clone(), Some(label.clone())), states);
             }
         }
 
@@ -143,7 +145,9 @@ where
                 let to = without_lambda.traverse_without_lambda(once(label.clone()), from.clone());
                 let deter_to = subset_as_usize(&states, &to);
 
-                deter.transitions.insert((deter_from, label.clone()), deter_to);
+                deter
+                    .transitions
+                    .insert((deter_from, label.clone()), deter_to);
 
                 // If we have not covered the to state we push it the the stack and save it.
                 if deter_states.get(&deter_to) == None {
@@ -169,7 +173,7 @@ where
 
 fn subset_as_usize<T>(set: &Set<T>, subset: &Set<T>) -> usize
 where
-    T: Eq + Hash
+    T: Eq + Hash,
 {
     let mut result = 0;
 
@@ -200,7 +204,7 @@ where
 
         for state in states.iter() {
             if self.accepting.get(state) != None {
-                return true
+                return true;
             }
         }
 

@@ -11,9 +11,6 @@ pub trait Automaton {
     type State: Eq + Hash;
     type Alphabet: Eq + Hash;
 
-    /// Checks whether the given input is accepted by the automaton.
-    /// Returns `Error::NoInitialState` if there is no initial state.
-    /// Returns `Error::NoTransition` if there is no transition from a given state and label.
     fn accepts<I: Iterator<Item = Self::Alphabet>>(&self, input: I) -> bool;
 
     fn states(&self) -> Set<Self::State>;
