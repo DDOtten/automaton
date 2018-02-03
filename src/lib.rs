@@ -1,29 +1,18 @@
-#![feature(nll, match_default_bindings)]
+#![feature(match_default_bindings)]
 
 pub use deter::Deter;
 pub use non_deter::NonDeter;
 pub use push_down::PushDown;
 
-use std::collections::HashSet as Set;
-
+/// A trait for automatons.
 pub trait Automaton {
-    type State;
+    /// The type of the input alphabet.
     type Alphabet;
 
-    type Situation;
-
+    /// Returnes whether the input is accepted by the automaton.
     fn accepts<I>(&self, input: I) -> bool
     where
         I: Iterator<Item = Self::Alphabet>;
-
-    fn traverse<I>(&self, input: I, situation: Self::Situation) -> Self::Situation
-    where
-        I: Iterator<Item = Self::Alphabet>;
-
-    fn states(&self) -> Set<Self::State>;
-    fn reachable_states(&self) -> Set<Self::State>;
-    
-    fn labels(&self) -> Set<Self::Alphabet>;
 }
 
 mod deter;
