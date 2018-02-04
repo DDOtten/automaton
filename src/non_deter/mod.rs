@@ -25,7 +25,7 @@ where
     where
         I: Iterator<Item = A>,
     {
-        states = self.lambda_closure(states);
+        states = self.epsilon_closure(states);
 
         for label in input {
             let mut new_states = Set::new();
@@ -36,7 +36,7 @@ where
                 }
             }
 
-            states = self.lambda_closure(new_states);
+            states = self.epsilon_closure(new_states);
         }
 
         states
@@ -93,7 +93,7 @@ where
         labels
     }
 
-    pub fn accepts_without_lambda<I>(&self, input: I) -> bool
+    pub fn accepts_no_epsilon<I>(&self, input: I) -> bool
     where
         I: Iterator<Item = A>,
     {
@@ -108,7 +108,7 @@ where
         false
     }
 
-    pub fn traverse_without_lambda<I>(&self, input: I, mut states: Set<S>) -> Set<S>
+    pub fn traverse_no_epsilon<I>(&self, input: I, mut states: Set<S>) -> Set<S>
     where
         I: Iterator<Item = A>,
     {
@@ -127,7 +127,7 @@ where
         states
     }
 
-    pub fn lambda_closure(&self, mut states: Set<S>) -> Set<S> {
+    pub fn epsilon_closure(&self, mut states: Set<S>) -> Set<S> {
         let mut not_checked: Vec<S> = states.iter().cloned().collect();
 
         while let Some(from) = not_checked.pop() {
@@ -144,8 +144,8 @@ where
         states
     }
 
-    pub fn eliminate_lambda(&self) -> NonDeter<S, A> {
-        let mut no_lambda = NonDeter {
+    pub fn eliminate_epsilon(&self) -> NonDeter<S, A> {
+        let mut no_epsilon = NonDeter {
             initial_states: self.initial_states.clone(),
             accepting_states: self.accepting_states.clone(),
             transitions: Map::new(),
@@ -158,24 +158,24 @@ where
 
                 states = self.traverse(once(label.clone()), states);
 
-                no_lambda
+                no_epsilon
                     .transitions
                     .insert((from.clone(), Some(label.clone())), states);
             }
         }
 
-        no_lambda
+        no_epsilon
     }
 
     pub fn make_deterministic(&self) -> Deter<usize, A> {
-        let without_lambda = self.eliminate_lambda();
+        let no_epsilon = self.eliminate_epsilon();
 
         // All the states and labels used by the automaton.
-        let states = without_lambda.states();
-        let labels = without_lambda.labels();
+        let states = no_epsilon.states();
+        let labels = no_epsilon.labels();
 
         let mut deter = Deter {
-            initial_state: subset_as_usize(&states, &without_lambda.initial_states.clone()),
+            initial_state: subset_as_usize(&states, &no_epsilon.initial_states.clone()),
             accepting_states: Set::new(),
             transitions: Map::new(),
         };
@@ -185,13 +185,13 @@ where
         deter_states.insert(deter.initial_state);
 
         // We make a stack of sets of states that we have not covered.
-        let mut not_checked = vec![without_lambda.initial_states.clone()];
+        let mut not_checked = vec![no_epsilon.initial_states.clone()];
         while let Some(from) = not_checked.pop() {
             let deter_from = subset_as_usize(&states, &from);
 
             // For each state and label we calculate the set of states that is reachable using the label.
             for label in labels.iter() {
-                let to = without_lambda.traverse_without_lambda(once(label.clone()), from.clone());
+                let to = no_epsilon.traverse_no_epsilon(once(label.clone()), from.clone());
                 let deter_to = subset_as_usize(&states, &to);
 
                 deter
@@ -208,8 +208,7 @@ where
 
         // A set is accepting_states if its intersection with the accepting_states states is not empty.
         // We calculate the usize of the set of accepting_states states.
-        let accepting_states_mask =
-            subset_as_usize(&states, &without_lambda.accepting_states.clone());
+        let accepting_states_mask = subset_as_usize(&states, &no_epsilon.accepting_states.clone());
 
         for state in deter_states.into_iter() {
             if state & accepting_states_mask != 0 {

@@ -3,8 +3,8 @@ use std::hash::Hash;
 
 use Automaton;
 
-#[derive(Clone)]
-pub struct NonDeterPushDown<S, A, G>
+#[derive(Debug, Clone)]
+pub struct PushDown<S, A, G>
 where
     S: Clone + Eq + Hash,
     A: Clone + Eq + Hash,
@@ -16,7 +16,7 @@ where
     pub transitions: Map<(S, Option<A>, Option<G>), Set<(S, Vec<G>)>>,
 }
 
-impl<S, A, G> NonDeterPushDown<S, A, G>
+impl<S, A, G> PushDown<S, A, G>
 where
     S: Clone + Eq + Hash,
     A: Clone + Eq + Hash,
@@ -128,7 +128,7 @@ where
     }
 }
 
-impl<S, A, G> Automaton for NonDeterPushDown<S, A, G>
+impl<S, A, G> Automaton for PushDown<S, A, G>
 where
     S: Clone + Eq + Hash,
     A: Clone + Eq + Hash,

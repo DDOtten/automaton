@@ -4,8 +4,6 @@ use std::ops;
 
 use Automaton;
 
-extern crate disjoint_sets;
-
 #[derive(Debug, Clone)]
 pub struct Deter<S, A>
 where
@@ -312,10 +310,9 @@ where
     where
         I: Iterator<Item = A>,
     {
-        if let Some(state) = self.traverse(input, self.initial_state.clone()) {
-            self.accepting_states.get(&state) != None
-        } else {
-            false
+        match self.traverse(input, self.initial_state.clone()) {
+            Some(state) => self.accepting_states.get(&state) != None,
+            None => false,
         }
     }
 }
