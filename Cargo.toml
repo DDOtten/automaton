@@ -4,4 +4,3 @@ version = "0.1.0"
 authors = ["DDOtten <daniel@otten.co>"]
 
 [dependencies]
-disjoint-sets = "0.3"

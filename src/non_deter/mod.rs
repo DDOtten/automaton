@@ -1,6 +1,5 @@
 use std::collections::{HashMap as Map, HashSet as Set};
 use std::hash::Hash;
-use std::iter::once;
 use std::ops;
 
 use {Automaton, Deter};
@@ -8,8 +7,8 @@ use {Automaton, Deter};
 #[derive(Debug, Clone)]
 pub struct NonDeter<S, A>
 where
-    S: Clone + Eq + Hash,
-    A: Clone + Eq + Hash,
+    S: Clone + Eq + Hash + ::std::fmt::Debug,
+    A: Clone + Eq + Hash + ::std::fmt::Debug,
 {
     pub initial_states: Set<S>,
     pub accepting_states: Set<S>,
@@ -18,16 +17,16 @@ where
 
 impl<S, A> NonDeter<S, A>
 where
-    S: Clone + Eq + Hash,
-    A: Clone + Eq + Hash,
+    S: Clone + Eq + Hash + ::std::fmt::Debug,
+    A: Clone + Eq + Hash + ::std::fmt::Debug,
 {
     pub fn traverse<I>(&self, input: I, mut states: Set<S>) -> Set<S>
     where
-        I: Iterator<Item = A>,
+        I: IntoIterator<Item = A>,
     {
         states = self.epsilon_closure(states);
 
-        for label in input {
+        for label in input.into_iter() {
             let mut new_states = Set::new();
 
             for from in states.into_iter() {
@@ -37,91 +36,6 @@ where
             }
 
             states = self.epsilon_closure(new_states);
-        }
-
-        states
-    }
-
-    pub fn states(&self) -> Set<S> {
-        let mut states = Set::new();
-
-        states.extend(self.initial_states.iter().cloned());
-        states.extend(self.accepting_states.iter().cloned());
-
-        for ((from, _label), to) in self.transitions.iter() {
-            states.insert(from.clone());
-            states.extend(to.iter().cloned());
-        }
-
-        states
-    }
-
-    pub fn reachable_states(&self) -> Set<S> {
-        let labels = self.labels();
-
-        let mut reachable_states = self.initial_states.clone();
-
-        let mut not_checked: Vec<S> = self.initial_states.iter().cloned().collect();
-        while let Some(from) = not_checked.pop() {
-            for label in labels.iter() {
-                let mut states = Set::new();
-                states.insert(from.clone());
-
-                states = self.traverse(once(label.clone()), states);
-
-                for state in states {
-                    if reachable_states.get(&state) == None {
-                        reachable_states.insert(state.clone());
-                        not_checked.push(state);
-                    }
-                }
-            }
-        }
-
-        reachable_states
-    }
-
-    pub fn labels(&self) -> Set<A> {
-        let mut labels = Set::new();
-
-        for ((_from, label), _to) in self.transitions.iter() {
-            if let Some(label) = label {
-                labels.insert(label.clone());
-            }
-        }
-
-        labels
-    }
-
-    pub fn accepts_no_epsilon<I>(&self, input: I) -> bool
-    where
-        I: Iterator<Item = A>,
-    {
-        let states = self.traverse(input, self.initial_states.clone());
-
-        for state in states.iter() {
-            if self.accepting_states.get(state) != None {
-                return true;
-            }
-        }
-
-        false
-    }
-
-    pub fn traverse_no_epsilon<I>(&self, input: I, mut states: Set<S>) -> Set<S>
-    where
-        I: Iterator<Item = A>,
-    {
-        for label in input {
-            let mut new_states = Set::new();
-
-            for from in states.into_iter() {
-                if let Some(ref to) = self.transitions.get(&(from, Some(label.clone()))) {
-                    new_states.extend(to.iter().cloned());
-                }
-            }
-
-            states = new_states;
         }
 
         states
@@ -144,19 +58,84 @@ where
         states
     }
 
-    pub fn eliminate_epsilon(&self) -> NonDeter<S, A> {
+    pub fn states(&self) -> Set<S> {
+        let mut states = Set::new();
+
+        states.extend(self.initial_states.iter().cloned());
+
+        for to in self.transitions.values() {
+            states.extend(to.iter().cloned());
+        }
+
+        states
+    }
+
+    pub fn used_states(&self) -> Set<S> {
+        let labels = self.labels();
+
+        let mut used_states = self.initial_states.clone();
+
+        let mut not_checked: Vec<S> = self.initial_states.iter().cloned().collect();
+        while let Some(from) = not_checked.pop() {
+            for label in labels.iter() {
+                let mut states = Set::new();
+                states.insert(from.clone());
+
+                states = self.traverse(Some(label.clone()), states);
+
+                for state in states {
+                    if used_states.get(&state) == None {
+                        used_states.insert(state.clone());
+                        not_checked.push(state);
+                    }
+                }
+            }
+        }
+
+        used_states
+    }
+
+    pub fn labels(&self) -> Set<A> {
+        let mut labels = Set::new();
+
+        for (_from, label) in self.transitions.keys() {
+            if let Some(label) = label {
+                labels.insert(label.clone());
+            }
+        }
+
+        labels
+    }
+
+    pub fn used_labels(&self) -> Set<A> {
+        let used_states = self.used_states();
+
+        let mut used_labels = Set::new();
+
+        for (from, label) in self.transitions.keys() {
+            if let Some(label) = label {
+                if used_states.get(from) != None {
+                    used_labels.insert(label.clone());
+                }
+            }
+        }
+
+        used_labels
+    }
+
+    pub fn no_epsilon(&self) -> NonDeter<S, A> {
         let mut no_epsilon = NonDeter {
             initial_states: self.initial_states.clone(),
             accepting_states: self.accepting_states.clone(),
             transitions: Map::new(),
         };
 
-        for ((from, label), _to) in self.transitions.iter() {
+        for (from, label) in self.transitions.keys() {
             if let Some(label) = label {
                 let mut states = Set::new();
                 states.insert(from.clone());
 
-                states = self.traverse(once(label.clone()), states);
+                states = self.traverse(Some(label.clone()), states);
 
                 no_epsilon
                     .transitions
@@ -167,61 +146,60 @@ where
         no_epsilon
     }
 
-    pub fn make_deterministic(&self) -> Deter<usize, A> {
-        let no_epsilon = self.eliminate_epsilon();
+    pub fn accepts_no_epsilon<I>(&self, input: I) -> bool
+    where
+        I: IntoIterator<Item = A>,
+    {
+        let states = self.traverse(input, self.initial_states.clone());
 
-        // All the states and labels used by the automaton.
-        let states = no_epsilon.states();
-        let labels = no_epsilon.labels();
+        for state in states.iter() {
+            if self.accepting_states.get(state) != None {
+                return true;
+            }
+        }
 
-        let mut deter = Deter {
-            initial_state: subset_as_usize(&states, &no_epsilon.initial_states.clone()),
-            accepting_states: Set::new(),
-            transitions: Map::new(),
-        };
+        false
+    }
 
-        // The states of deter.
-        let mut deter_states = Set::new();
-        deter_states.insert(deter.initial_state);
+    pub fn traverse_no_epsilon<I>(&self, input: I, mut states: Set<S>) -> Set<S>
+    where
+        I: IntoIterator<Item = A>,
+    {
+        for label in input.into_iter() {
+            let mut new_states = Set::new();
 
-        // We make a stack of sets of states that we have not covered.
-        let mut not_checked = vec![no_epsilon.initial_states.clone()];
-        while let Some(from) = not_checked.pop() {
-            let deter_from = subset_as_usize(&states, &from);
-
-            // For each state and label we calculate the set of states that is reachable using the label.
-            for label in labels.iter() {
-                let to = no_epsilon.traverse_no_epsilon(once(label.clone()), from.clone());
-                let deter_to = subset_as_usize(&states, &to);
-
-                deter
-                    .transitions
-                    .insert((deter_from, label.clone()), deter_to);
-
-                // If we have not covered the to state we push it the the stack and save it.
-                if deter_states.get(&deter_to) == None {
-                    deter_states.insert(deter_to);
-                    not_checked.push(to);
+            for from in states.into_iter() {
+                if let Some(ref to) = self.transitions.get(&(from, Some(label.clone()))) {
+                    new_states.extend(to.iter().cloned());
                 }
             }
+
+            states = new_states;
         }
 
-        // A set is accepting_states if its intersection with the accepting_states states is not empty.
-        // We calculate the usize of the set of accepting_states states.
-        let accepting_states_mask = subset_as_usize(&states, &no_epsilon.accepting_states.clone());
+        states
+    }
 
-        for state in deter_states.into_iter() {
-            if state & accepting_states_mask != 0 {
-                deter.accepting_states.insert(state);
+    pub fn kleene_star(mut self) -> NonDeter<S, A> {
+        for accepting in self.accepting_states.iter().cloned() {
+            match self.transitions.remove(&(accepting.clone(), None)) {
+                Some(mut states) => {
+                    states.extend(self.initial_states.iter().cloned());
+                    self.transitions.insert((accepting, None), states);
+                },
+                None => {
+                    self.transitions
+                        .insert((accepting, None), self.initial_states.clone());
+                },
             }
         }
 
-        deter
+        self
     }
 
     fn combine<T>(&self, other: &NonDeter<T, A>) -> NonDeter<(S, T), A>
     where
-        T: Clone + Eq + Hash,
+        T: Clone + Eq + Hash + ::std::fmt::Debug,
     {
         let initial_states = product(&self.initial_states, &other.initial_states);
 
@@ -246,7 +224,7 @@ where
 
     pub fn union<'a, T>(&'a self, other: &'a NonDeter<T, A>) -> NonDeter<(S, T), A>
     where
-        T: Clone + Eq + Hash,
+        T: Clone + Eq + Hash + ::std::fmt::Debug,
     {
         let mut automaton = NonDeter::combine(&self, &other);
 
@@ -270,7 +248,7 @@ where
 
     pub fn intersection<'a, T>(&'a self, other: &'a NonDeter<T, A>) -> NonDeter<(S, T), A>
     where
-        T: Clone + Eq + Hash,
+        T: Clone + Eq + Hash + ::std::fmt::Debug,
     {
         let mut automaton = NonDeter::combine(&self, &other);
 
@@ -287,7 +265,7 @@ where
 
     pub fn difference<'a, T>(&'a self, other: &'a NonDeter<T, A>) -> NonDeter<(S, T), A>
     where
-        T: Clone + Eq + Hash,
+        T: Clone + Eq + Hash + ::std::fmt::Debug,
     {
         let mut automaton = NonDeter::combine(&self, &other);
 
@@ -306,7 +284,7 @@ where
 
     pub fn symmetric_difference<'a, T>(&'a self, other: &'a NonDeter<T, A>) -> NonDeter<(S, T), A>
     where
-        T: Clone + Eq + Hash,
+        T: Clone + Eq + Hash + ::std::fmt::Debug,
     {
         let mut automaton = NonDeter::combine(&self, &other);
 
@@ -335,27 +313,10 @@ where
     }
 }
 
-fn subset_as_usize<T>(set: &Set<T>, subset: &Set<T>) -> usize
-where
-    T: Eq + Hash,
-{
-    let mut result = 0;
-
-    let mut power = 1;
-    for element in set.iter() {
-        if subset.get(element) != None {
-            result += power;
-        }
-        power <<= 1;
-    }
-
-    result
-}
-
 fn product<T, U>(left_set: &Set<T>, right_set: &Set<U>) -> Set<(T, U)>
 where
-    T: Clone + Eq + Hash,
-    U: Clone + Eq + Hash,
+    T: Clone + Eq + Hash + ::std::fmt::Debug,
+    U: Clone + Eq + Hash + ::std::fmt::Debug,
 {
     let mut result = Set::new();
 
@@ -370,14 +331,14 @@ where
 
 impl<S, A> Automaton for NonDeter<S, A>
 where
-    S: Clone + Eq + Hash,
-    A: Clone + Eq + Hash,
+    S: Clone + Eq + Hash + ::std::fmt::Debug,
+    A: Clone + Eq + Hash + ::std::fmt::Debug,
 {
     type Alphabet = A;
 
     fn accepts<I>(&self, input: I) -> bool
     where
-        I: Iterator<Item = A>,
+        I: IntoIterator<Item = A>,
     {
         let states = self.traverse(input, self.initial_states.clone());
 
@@ -391,11 +352,44 @@ where
     }
 }
 
+impl<S, A> From<Deter<S, A>> for NonDeter<S, A>
+where
+    S: Clone + Eq + Hash + ::std::fmt::Debug,
+    A: Clone + Eq + Hash + ::std::fmt::Debug,
+{
+    fn from(deter: Deter<S, A>) -> NonDeter<S, A> {
+        let Deter {
+            initial_state,
+            accepting_states,
+            transitions,
+        } = deter;
+
+        let mut initial_states = Set::new();
+        initial_states.insert(initial_state);
+
+        let transitions = transitions
+            .into_iter()
+            .map(|((from, label), to)| {
+                let mut states = Set::new();
+                states.insert(to);
+
+                ((from, Some(label)), states)
+            })
+            .collect();
+
+        NonDeter {
+            initial_states,
+            accepting_states,
+            transitions,
+        }
+    }
+}
+
 impl<'a, 'b, S, T, A> ops::BitOr<&'b NonDeter<T, A>> for &'a NonDeter<S, A>
 where
-    S: Clone + Eq + Hash,
-    T: Clone + Eq + Hash,
-    A: Clone + Eq + Hash,
+    S: Clone + Eq + Hash + ::std::fmt::Debug,
+    T: Clone + Eq + Hash + ::std::fmt::Debug,
+    A: Clone + Eq + Hash + ::std::fmt::Debug,
 {
     type Output = NonDeter<(S, T), A>;
 
@@ -406,9 +400,9 @@ where
 
 impl<'a, 'b, S, T, A> ops::BitAnd<&'b NonDeter<T, A>> for &'a NonDeter<S, A>
 where
-    S: Clone + Eq + Hash,
-    T: Clone + Eq + Hash,
-    A: Clone + Eq + Hash,
+    S: Clone + Eq + Hash + ::std::fmt::Debug,
+    T: Clone + Eq + Hash + ::std::fmt::Debug,
+    A: Clone + Eq + Hash + ::std::fmt::Debug,
 {
     type Output = NonDeter<(S, T), A>;
 
@@ -419,9 +413,9 @@ where
 
 impl<'a, 'b, S, T, A> ops::BitXor<&'b NonDeter<T, A>> for &'a NonDeter<S, A>
 where
-    S: Clone + Eq + Hash,
-    T: Clone + Eq + Hash,
-    A: Clone + Eq + Hash,
+    S: Clone + Eq + Hash + ::std::fmt::Debug,
+    T: Clone + Eq + Hash + ::std::fmt::Debug,
+    A: Clone + Eq + Hash + ::std::fmt::Debug,
 {
     type Output = NonDeter<(S, T), A>;
 
@@ -432,9 +426,9 @@ where
 
 impl<'a, 'b, S, T, A> ops::Sub<&'b NonDeter<T, A>> for &'a NonDeter<S, A>
 where
-    S: Clone + Eq + Hash,
-    T: Clone + Eq + Hash,
-    A: Clone + Eq + Hash,
+    S: Clone + Eq + Hash + ::std::fmt::Debug,
+    T: Clone + Eq + Hash + ::std::fmt::Debug,
+    A: Clone + Eq + Hash + ::std::fmt::Debug,
 {
     type Output = NonDeter<(S, T), A>;
 
