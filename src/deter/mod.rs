@@ -289,13 +289,15 @@ where
     /// The minimal automaton that accepts precisely one `1`.
     ///
     /// ```
-    /// // Initial:
-    /// //     ╭───╮  1  ╔═══╗ ──╮           ╔═══╗
-    /// // ──▷ │ a │ ──▷ ║ c ║   │ 0         ║ f ║
-    /// //     ╰───╯     ╚═══╝ ◁─╯           ╚═══╝
-    /// //     △   │       △   ╲ 1           △   │
-    /// //   0 │   │ 0   0 │    ╲            ╰───╯
-    /// //     │   ▽       │     ◁            0,1
+    /// // Initial:        0
+    /// //               ╭───╮
+    /// //               │   ▽
+    /// //     ╭───╮  1  ╔═══╗         1     ╔═══╗
+    /// // ──▷ │ a │ ──▷ ║ c ║ ──────╮       ║ f ║
+    /// //     ╰───╯     ╚═══╝       │       ╚═══╝
+    /// //     △   │       △         │       △   │
+    /// //   0 │   │ 0   0 │         │       ╰───╯
+    /// //     │   ▽       │         ▽        0,1
     /// //     ╭───╮  1  ╔═══╗  1  ╭───╮ ──╮
     /// //     │ b │ ──▷ ║ d ║ ──▷ │ e │   │ 0,1
     /// //     ╰───╯     ╚═══╝     ╰───╯ ◁─╯
@@ -442,14 +444,156 @@ where
         }
     }
 
-    pub fn complement(&self) -> Deter<S, A> {
+    /// Returnes a automaton accepting the same language with a transition for each state and label.
+    ///
+    /// For every missing transition inserts a transition to a new `None` state.
+    ///
+    /// # Examples
+    ///
+    /// The complete automaton that accepts only `ab`.
+    ///
+    /// ```
+    /// // Initial:
+    /// //     ╭───╮  a  ╭───╮  b  ╔═══╗
+    /// // ──▷ │ 0 │ ──▷ │ 1 │ ──▷ ║ 2 ║
+    /// //     ╰───╯     ╰───╯     ╚═══╝
+    /// //
+    /// // Complete:
+    /// //     ╭───╮  a  ╭───╮  b  ╔═══╗
+    /// // ──▷ │ 0 │ ──▷ │ 1 │ ──▷ ║ 2 ║
+    /// //     ╰───╯     ╰───╯     ╚═══╝
+    /// //       │         │         │
+    /// //       │         │ a       │
+    /// //       │         ▽         │
+    /// //       │ b     ╭───╮       │
+    /// //       ╰─────▷ │ N │ ◁─────╯
+    /// //               ╰───╯        a,b
+    /// //               △   │
+    /// //               ╰───╯
+    /// //                a,b
+    ///
+    /// extern crate automaton;
+    /// use automaton::Automaton;
+    ///
+    /// # fn main() {
+    /// let deter = automaton::Deter {
+    ///     initial_state: 0,
+    ///     accepting_states: vec![
+    ///         2,
+    ///     ].into_iter().collect(),
+    ///     transitions: vec![
+    ///         ((0, 'a'), 1),
+    ///         ((1, 'b'), 2),
+    ///     ].into_iter().collect(),
+    /// };
+    ///
+    /// let complete = deter.complete();
+    ///
+    /// assert!(complete.states().len() == 4);
+    /// assert!(complete.transitions.len() == 8);
+    ///
+    /// assert!(complete.accepts("ab".chars()));
+    /// assert!(!complete.accepts("aba".chars()));
+    /// # }
+    /// ```
+    pub fn complete(self) -> Deter<Option<S>, A> {
+        let states = self.states();
+        let labels = self.labels();
+
+        let Deter {
+            initial_state,
+            accepting_states,
+            transitions,
+        } = self;
+
         Deter {
-            initial_state: self.initial_state.clone(),
-            accepting_states: &self.states() - &self.accepting_states,
-            transitions: self.transitions.clone(),
+            initial_state: Some(initial_state),
+            accepting_states: accepting_states
+                .into_iter()
+                .map(|state| Some(state))
+                .collect(),
+            transitions: {
+                let mut missing_transitions = Map::new();
+
+                for state in states.iter() {
+                    for label in labels.iter() {
+                        if transitions.get(&(state.clone(), label.clone())) == None {
+                            missing_transitions.insert((Some(state.clone()), label.clone()), None);
+                        }
+                    }
+                }
+
+                missing_transitions.extend(
+                    transitions
+                        .into_iter()
+                        .map(|((from, label), to)| ((Some(from), label), Some(to))),
+                );
+
+                missing_transitions.extend(labels.into_iter().map(|label| ((None, label), None)));
+
+                missing_transitions
+            },
         }
     }
 
+    /// Returnes a automaton that accepts precisely the things that `self` does not accept.
+    ///
+    /// All transitions in self must be present for this to work.
+    ///
+    /// # Examples
+    ///
+    /// The automaton that accepts an uneven number of `1`'s is converted to the automaton that
+    /// accepts an even number of `1`'s.
+    ///
+    /// ```
+    /// // Initial:
+    /// //            1
+    /// //     ╭───╮ ──▷ ╔═══╗
+    /// // ──▷ │ 0 │     ║ 1 ║
+    /// //     ╰───╯ ◁── ╚═══╝
+    /// //     △   │  1  △   │
+    /// //     ╰───╯     ╰───╯
+    /// //       0         0
+    /// //
+    /// // Complement:
+    /// //            1
+    /// //     ╔═══╗ ──▷ ╭───╮
+    /// // ──▷ ║ 0 ║     │ 1 │
+    /// //     ╚═══╝ ◁── ╰───╯
+    /// //     △   │  1  △   │
+    /// //     ╰───╯     ╰───╯
+    /// //       0         0
+    ///
+    /// extern crate automaton;
+    /// use automaton::Automaton;
+    ///
+    /// # fn main() {
+    /// let deter = automaton::Deter {
+    ///     initial_state: 0,
+    ///     accepting_states: vec![
+    ///         1,
+    ///     ].into_iter().collect(),
+    ///     transitions: vec![
+    ///         ((0, 0), 0),
+    ///         ((0, 1), 1),
+    ///         ((1, 0), 1),
+    ///         ((1, 1), 0),
+    ///     ].into_iter().collect(),
+    /// };
+    ///
+    /// let complement = deter.complement();
+    ///
+    /// assert!(complement.accepts(vec![0, 1, 0, 1, 0, 0]));
+    /// assert!(complement.accepts(vec![]));
+    /// assert!(!complement.accepts(vec![1, 0, 0]));
+    /// assert!(!complement.accepts(vec![1]));
+    /// # }
+    /// ```
+    pub fn complement(mut self) -> Deter<S, A> {
+        self.accepting_states = &self.states() - &self.accepting_states;
+
+        self
+    }
     fn combine<T>(&self, other: &Deter<T, A>) -> Deter<(S, T), A>
     where
         T: Clone + Eq + Hash + ::std::fmt::Debug,
@@ -590,6 +734,23 @@ where
     A: Clone + Eq + Hash + ::std::fmt::Debug,
 {
     fn from(non_deter: ::NonDeter<S, A>) -> Deter<usize, A> {
+        fn subset_as_usize<T>(set: &Set<T>, subset: &Set<T>) -> usize
+        where
+            T: Eq + Hash,
+        {
+            let mut result = 0;
+
+            let mut power = 1;
+            for element in set.iter() {
+                if subset.get(element) != None {
+                    result += power;
+                }
+                power <<= 1;
+            }
+
+            result
+        }
+
         let states = non_deter.states();
         let labels = non_deter.labels();
 
@@ -652,24 +813,7 @@ where
     }
 }
 
-fn subset_as_usize<T>(set: &Set<T>, subset: &Set<T>) -> usize
-where
-    T: Eq + Hash,
-{
-    let mut result = 0;
-
-    let mut power = 1;
-    for element in set.iter() {
-        if subset.get(element) != None {
-            result += power;
-        }
-        power <<= 1;
-    }
-
-    result
-}
-
-impl<'a, S, A> ops::Not for &'a Deter<S, A>
+impl<S, A> ops::Not for Deter<S, A>
 where
     S: Clone + Eq + Hash + ::std::fmt::Debug,
     A: Clone + Eq + Hash + ::std::fmt::Debug,
