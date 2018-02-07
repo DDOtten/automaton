@@ -2,7 +2,7 @@ use std::collections::{HashMap as Map, HashSet as Set};
 use std::hash::Hash;
 use std::ops;
 
-use {Automaton, Deter};
+use Automaton;
 
 #[derive(Debug, Clone)]
 pub struct NonDeter<S, A>
@@ -352,13 +352,13 @@ where
     }
 }
 
-impl<S, A> From<Deter<S, A>> for NonDeter<S, A>
+impl<S, A> From<::Deter<S, A>> for NonDeter<S, A>
 where
     S: Clone + Eq + Hash + ::std::fmt::Debug,
     A: Clone + Eq + Hash + ::std::fmt::Debug,
 {
-    fn from(deter: Deter<S, A>) -> NonDeter<S, A> {
-        let Deter {
+    fn from(deter: ::Deter<S, A>) -> NonDeter<S, A> {
+        let ::Deter {
             initial_state,
             accepting_states,
             transitions,

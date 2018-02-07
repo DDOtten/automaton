@@ -123,7 +123,7 @@ where
     pub fn labels(&self) -> Set<A> {
         let mut labels = Set::new();
 
-        for (_from, label, _top) in self.transitions.keys() {
+        for (_from, label, _symbol) in self.transitions.keys() {
             if let Some(label) = label {
                 labels.insert(label.clone());
             }
@@ -137,7 +137,7 @@ where
 
         let mut used_labels = Set::new();
 
-        for (from, label, _top) in self.transitions.keys() {
+        for (from, label, _symbol) in self.transitions.keys() {
             if let Some(label) = label {
                 if used_states.get(from) != None {
                     used_labels.insert(label.clone());
@@ -151,9 +151,9 @@ where
     pub fn symbols(&self) -> Set<T> {
         let mut symbols = Set::new();
 
-        for (_from, _label, top) in self.transitions.keys() {
-            if let Some(top) = top {
-                symbols.insert(top.clone());
+        for (_from, _label, symbol) in self.transitions.keys() {
+            if let Some(symbol) = symbol {
+                symbols.insert(symbol.clone());
             }
         }
 
@@ -165,10 +165,10 @@ where
 
         let mut used_symbols = Set::new();
 
-        for (from, _label, top) in self.transitions.keys() {
-            if let Some(top) = top {
+        for (from, _label, symbol) in self.transitions.keys() {
+            if let Some(symbol) = symbol {
                 if used_states.get(from) != None {
-                    used_symbols.insert(top.clone());
+                    used_symbols.insert(symbol.clone());
                 }
             }
         }
@@ -225,5 +225,68 @@ where
         }
 
         false
+    }
+}
+
+impl<S, A> From<::Deter<S, A>> for PushDown<S, A, ()>
+where
+    S: Clone + Eq + Hash + ::std::fmt::Debug,
+    A: Clone + Eq + Hash + ::std::fmt::Debug,
+{
+    fn from(deter: ::Deter<S, A>) -> PushDown<S, A, ()> {
+        let ::Deter {
+            initial_state,
+            accepting_states,
+            transitions,
+        } = deter;
+
+        let mut initial_states = Set::new();
+        initial_states.insert(initial_state);
+
+        let transitions = transitions
+            .into_iter()
+            .map(|((from, label), to)| {
+                let mut states = Set::new();
+                states.insert((to, vec![]));
+
+                ((from, Some(label), None), states)
+            })
+            .collect();
+
+        PushDown {
+            initial_states,
+            initial_stack: vec![],
+            accepting_states,
+            transitions,
+        }
+    }
+}
+
+impl<S, A> From<::NonDeter<S, A>> for PushDown<S, A, ()>
+where
+    S: Clone + Eq + Hash + ::std::fmt::Debug,
+    A: Clone + Eq + Hash + ::std::fmt::Debug,
+{
+    fn from(deter: ::NonDeter<S, A>) -> PushDown<S, A, ()> {
+        let ::NonDeter {
+            initial_states,
+            accepting_states,
+            transitions,
+        } = deter;
+
+        let transitions = transitions
+            .into_iter()
+            .map(|((from, label), to)| {
+                let to = to.into_iter().map(|state| (state, vec![])).collect();
+                ((from, label, None), to)
+            })
+            .collect();
+
+        PushDown {
+            initial_states,
+            initial_stack: vec![],
+            accepting_states,
+            transitions,
+        }
     }
 }

@@ -3,14 +3,14 @@ use std::hash::Hash;
 
 use Automaton;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum State<S> {
     Going(S),
     Accepted,
     Rejected,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Direction {
     Left,
     Stay,
@@ -174,6 +174,57 @@ where
     }
 }
 
+impl<S, T> From<::Deter<S, T>> for TuringMachine<Option<S>, T>
+where
+    S: Clone + Eq + Hash + ::std::fmt::Debug,
+    T: Clone + Eq + Hash + ::std::fmt::Debug,
+{
+    fn from(deter: ::Deter<S, T>) -> TuringMachine<Option<S>, T> {
+        let ::Deter {
+            initial_state,
+            accepting_states,
+            transitions,
+        } = deter;
+
+        let mut transitions: Map<_, _> = transitions
+            .into_iter()
+            .map(|((from, label), to)| {
+                (
+                    (Some(from), Some(label)),
+                    (State::Going(Some(to)), None, Direction::Right),
+                )
+            })
+            .collect();
+
+        transitions.insert(
+            (None, None),
+            (State::Going(Some(initial_state)), None, Direction::Right),
+        );
+
+        transitions.extend(accepting_states.into_iter().map(|state| {
+            (
+                (Some(state), None),
+                (State::Accepted, None, Direction::Stay),
+            )
+        }));
+
+        TuringMachine {
+            initial_state: None,
+            transitions,
+        }
+    }
+}
+
+impl<S, T> From<::NonDeter<S, T>> for TuringMachine<Option<usize>, T>
+where
+    S: Clone + Eq + Hash + ::std::fmt::Debug,
+    T: Clone + Eq + Hash + ::std::fmt::Debug,
+{
+    fn from(non_deter: ::NonDeter<S, T>) -> TuringMachine<Option<usize>, T> {
+        TuringMachine::from(::Deter::from(non_deter))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -183,22 +234,40 @@ mod tests {
         use super::Direction::*;
         use super::State::*;
 
-        let turing = TuringMachine {
-            initial_state: 'o',
+        let deter: TuringMachine<_, _> = ::Deter {
+            initial_state: 'p',
+            accepting_states: vec!['r', 't'].into_iter().collect(),
             transitions: vec![
-                (('o', None), (Going('p'), None, Right)),
-                (('p', Some('a')), (Going('q'), Some('a'), Right)),
-                (('p', Some('b')), (Going('s'), Some('b'), Right)),
-                (('q', Some('a')), (Going('q'), Some('a'), Right)),
-                (('q', Some('b')), (Going('r'), Some('b'), Right)),
-                (('r', Some('a')), (Going('r'), Some('a'), Right)),
-                (('r', Some('b')), (Going('r'), Some('b'), Right)),
-                (('s', Some('a')), (Going('t'), Some('a'), Right)),
-                (('s', Some('b')), (Going('s'), Some('b'), Right)),
-                (('t', Some('a')), (Going('q'), Some('a'), Right)),
-                (('t', Some('b')), (Going('r'), Some('b'), Right)),
-                (('t', None), (Accepted, None, Right)),
-                (('r', None), (Accepted, None, Right)),
+                (('p', 'a'), 'q'),
+                (('p', 'b'), 's'),
+                (('q', 'a'), 'q'),
+                (('q', 'b'), 'r'),
+                (('r', 'a'), 'r'),
+                (('r', 'b'), 'r'),
+                (('s', 'a'), 't'),
+                (('s', 'b'), 's'),
+                (('t', 'a'), 'q'),
+                (('t', 'b'), 'r'),
+            ].into_iter()
+                .collect(),
+        }.into();
+
+        let turing = TuringMachine {
+            initial_state: None,
+            transitions: vec![
+                ((None, None), (Going(Some('p')), None, Right)),
+                ((Some('p'), Some('a')), (Going(Some('q')), None, Right)),
+                ((Some('p'), Some('b')), (Going(Some('s')), None, Right)),
+                ((Some('q'), Some('a')), (Going(Some('q')), None, Right)),
+                ((Some('q'), Some('b')), (Going(Some('r')), None, Right)),
+                ((Some('r'), Some('a')), (Going(Some('r')), None, Right)),
+                ((Some('r'), Some('b')), (Going(Some('r')), None, Right)),
+                ((Some('s'), Some('a')), (Going(Some('t')), None, Right)),
+                ((Some('s'), Some('b')), (Going(Some('s')), None, Right)),
+                ((Some('t'), Some('a')), (Going(Some('q')), None, Right)),
+                ((Some('t'), Some('b')), (Going(Some('r')), None, Right)),
+                ((Some('t'), None), (Accepted, None, Stay)),
+                ((Some('r'), None), (Accepted, None, Stay)),
             ].into_iter()
                 .collect(),
         };
@@ -211,5 +280,8 @@ mod tests {
         assert!(!turing.accepts("bbb".chars().map(|c| Some(c))));
         assert!(!turing.accepts("baa".chars().map(|c| Some(c))));
         assert!(!turing.accepts("bbaa".chars().map(|c| Some(c))));
+
+        assert!(deter.initial_state == turing.initial_state);
+        assert!(deter.transitions == turing.transitions);
     }
 }

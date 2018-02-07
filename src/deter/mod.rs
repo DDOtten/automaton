@@ -2,7 +2,7 @@ use std::collections::{HashMap as Map, HashSet as Set};
 use std::hash::Hash;
 use std::ops;
 
-use {Automaton, NonDeter};
+use Automaton;
 
 #[derive(Debug, Clone)]
 pub struct Deter<S, A>
@@ -23,6 +23,47 @@ where
     S: Clone + Eq + Hash + ::std::fmt::Debug,
     A: Clone + Eq + Hash + ::std::fmt::Debug,
 {
+    /// Traverses the automata using the given input starting at the given state.
+    ///
+    /// Returnes the state the automaton ends up in.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// //       a                   a
+    /// //     ╭───╮               ╭───╮
+    /// //     │   ▽  a            │   ▽
+    /// //     ╭───╮ ──▷ ╭───╮  a  ╔═══╗ ──╮
+    /// // ──▷ │ 0 │     │ 1 │ ──▷ ║ 2 ║   │ a,b
+    /// //     ╰───╯ ◁── ╰───╯     ╚═══╝ ◁─╯
+    /// //       △    b              │
+    /// //       ╰───────────────────╯
+    /// //                 b
+    ///
+    /// extern crate automaton;
+    /// use automaton::Automaton;
+    ///
+    /// # fn main() {
+    /// let deter = automaton::Deter {
+    ///     initial_state: 0,
+    ///     accepting_states: vec![
+    ///         2,
+    ///     ].into_iter().collect(),
+    ///     transitions: vec![
+    ///         ((0, 'a'), 1),
+    ///         ((0, 'b'), 0),
+    ///         ((1, 'a'), 2),
+    ///         ((1, 'b'), 0),
+    ///         ((2, 'a'), 2),
+    ///         ((2, 'b'), 0),
+    ///     ].into_iter().collect(),
+    /// };
+    ///
+    /// assert!(deter.traverse("bab".chars(), 0) == Some(0));
+    /// assert!(deter.traverse("aba".chars(), 1) == Some(1));
+    /// assert!(deter.traverse("bab".chars(), 2) == Some(0));
+    /// # }
+    /// ```
     pub fn traverse<I>(&self, input: I, mut state: S) -> Option<S>
     where
         I: IntoIterator<Item = A>,
@@ -34,6 +75,45 @@ where
         Some(state)
     }
 
+    /// A quick calculation of states the automaton could end up in.
+    ///
+    /// Returnes the initial state and all states that are the result of a transition.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// //     ╭───╮     ╔═══╗ ──╮
+    /// // ──▷ │ ! │     ║ @ ║   │ a,b
+    /// //     ╰───╯     ╚═══╝ ◁─╯
+    /// //       │
+    /// //       │ a
+    /// //       ▽
+    /// //     ╭───╮  a  ╔═══╗     ╔═══╗
+    /// //     │ # │ ──▷ ║ $ ║     ║ % ║
+    /// //     ╰───╯     ╚═══╝     ╚═══╝
+    ///
+    /// extern crate automaton;
+    /// use automaton::Automaton;
+    ///
+    /// # fn main() {
+    /// let deter = automaton::Deter {
+    ///     initial_state: '!',
+    ///     accepting_states: vec![
+    ///         '@',
+    ///         '$',
+    ///         '%',
+    ///     ].into_iter().collect(),
+    ///     transitions: vec![
+    ///         (('!', 'a'), '#'),
+    ///         (('#', 'a'), '$'),
+    ///         (('@', 'a'), '@'),
+    ///         (('@', 'b'), '@'),
+    ///     ].into_iter().collect(),
+    /// };
+    ///
+    /// assert!(deter.states() == vec!['!', '@', '#', '$'].into_iter().collect());
+    /// # }
+    /// ```
     pub fn states(&self) -> Set<S> {
         let mut states = Set::new();
 
@@ -46,6 +126,43 @@ where
         states
     }
 
+    /// All states that are reachable from the initial state.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// //     ╭───╮     ╔═══╗ ──╮
+    /// // ──▷ │ ! │     ║ @ ║   │ a,b
+    /// //     ╰───╯     ╚═══╝ ◁─╯
+    /// //       │
+    /// //       │ a
+    /// //       ▽
+    /// //     ╭───╮  a  ╔═══╗     ╔═══╗
+    /// //     │ # │ ──▷ ║ $ ║     ║ % ║
+    /// //     ╰───╯     ╚═══╝     ╚═══╝
+    ///
+    /// extern crate automaton;
+    /// use automaton::Automaton;
+    ///
+    /// # fn main() {
+    /// let deter = automaton::Deter {
+    ///     initial_state: '!',
+    ///     accepting_states: vec![
+    ///         '@',
+    ///         '$',
+    ///         '%',
+    ///     ].into_iter().collect(),
+    ///     transitions: vec![
+    ///         (('!', 'a'), '#'),
+    ///         (('#', 'a'), '$'),
+    ///         (('@', 'a'), '@'),
+    ///         (('@', 'b'), '@'),
+    ///     ].into_iter().collect(),
+    /// };
+    ///
+    /// assert!(deter.used_states() == vec!['!', '#', '$'].into_iter().collect());
+    /// # }
+    /// ```
     pub fn used_states(&self) -> Set<S> {
         let labels = self.labels();
 
@@ -67,31 +184,105 @@ where
         used_states
     }
 
+    /// A quick calculation of the labels the automaton uses.
+    ///
+    /// Returnes every label that is used in a transition.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// //     ╭───╮     ╔═══╗ ──╮
+    /// // ──▷ │ ! │     ║ @ ║   │ a,b
+    /// //     ╰───╯     ╚═══╝ ◁─╯
+    /// //       │
+    /// //       │ a
+    /// //       ▽
+    /// //     ╭───╮  a  ╔═══╗     ╔═══╗
+    /// //     │ # │ ──▷ ║ $ ║     ║ % ║
+    /// //     ╰───╯     ╚═══╝     ╚═══╝
+    ///
+    /// extern crate automaton;
+    /// use automaton::Automaton;
+    ///
+    /// # fn main() {
+    /// let deter = automaton::Deter {
+    ///     initial_state: '!',
+    ///     accepting_states: vec![
+    ///         '@',
+    ///         '$',
+    ///         '%',
+    ///     ].into_iter().collect(),
+    ///     transitions: vec![
+    ///         (('!', 'a'), '#'),
+    ///         (('#', 'a'), '$'),
+    ///         (('@', 'a'), '@'),
+    ///         (('@', 'b'), '@'),
+    ///     ].into_iter().collect(),
+    /// };
+    ///
+    /// assert!(deter.labels() == vec!['a', 'b'].into_iter().collect());
+    /// # }
+    /// ```
     pub fn labels(&self) -> Set<A> {
-        let mut labels = Set::new();
-
-        for (_from, label) in self.transitions.keys() {
-            labels.insert(label.clone());
-        }
-
-        labels
+        self.transitions
+            .keys()
+            .map(|(_from, label)| label.clone())
+            .collect()
     }
 
+    /// All labels that are used in a transition between reachable states.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// //     ╭───╮     ╔═══╗ ──╮
+    /// // ──▷ │ ! │     ║ @ ║   │ a,b
+    /// //     ╰───╯     ╚═══╝ ◁─╯
+    /// //       │
+    /// //       │ a
+    /// //       ▽
+    /// //     ╭───╮  a  ╔═══╗     ╔═══╗
+    /// //     │ # │ ──▷ ║ $ ║     ║ % ║
+    /// //     ╰───╯     ╚═══╝     ╚═══╝
+    ///
+    /// extern crate automaton;
+    /// use automaton::Automaton;
+    ///
+    /// # fn main() {
+    /// let deter = automaton::Deter {
+    ///     initial_state: '!',
+    ///     accepting_states: vec![
+    ///         '@',
+    ///         '$',
+    ///         '%',
+    ///     ].into_iter().collect(),
+    ///     transitions: vec![
+    ///         (('!', 'a'), '#'),
+    ///         (('#', 'a'), '$'),
+    ///         (('@', 'a'), '@'),
+    ///         (('@', 'b'), '@'),
+    ///     ].into_iter().collect(),
+    /// };
+    ///
+    /// assert!(deter.used_labels() == vec!['a'].into_iter().collect());
+    /// # }
+    /// ```
     pub fn used_labels(&self) -> Set<A> {
         let used_states = self.used_states();
 
-        let mut used_labels = Set::new();
-
-        for (from, label) in self.transitions.keys() {
-            if used_states.get(from) != None {
-                used_labels.insert(label.clone());
-            }
-        }
-
-        used_labels
+        self.transitions
+            .keys()
+            .filter_map(|(from, label)| {
+                if used_states.get(from) == None {
+                    None
+                } else {
+                    Some(label.clone())
+                }
+            })
+            .collect()
     }
 
-    /// Returnes the automaton that accepts the same language with the minimal amount of states.
+    /// Returnes the automaton with the minimal amount of states that accepts the same language.
     ///
     /// # Examples
     ///
@@ -101,13 +292,13 @@ where
     /// // Initial:
     /// //     ╭───╮  1  ╔═══╗ ──╮           ╔═══╗
     /// // ──▷ │ a │ ──▷ ║ c ║   │ 0         ║ f ║
-    /// //     ╰───╯     ╚═══╝ ◁─┘           ╚═══╝
+    /// //     ╰───╯     ╚═══╝ ◁─╯           ╚═══╝
     /// //     △   │       △   ╲ 1           △   │
     /// //   0 │   │ 0   0 │    ╲            ╰───╯
     /// //     │   ▽       │     ◁            0,1
     /// //     ╭───╮  1  ╔═══╗  1  ╭───╮ ──╮
     /// //     │ b │ ──▷ ║ d ║ ──▷ │ e │   │ 0,1
-    /// //     ╰───╯     ╚═══╝     ╰───╯ ◁─┘
+    /// //     ╰───╯     ╚═══╝     ╰───╯ ◁─╯
     /// //
     /// // Minimal:
     /// //     ╭───╮  1  ╔═══╗  1  ╭───╮
@@ -123,7 +314,11 @@ where
     /// # fn main() {
     /// let deter = automaton::Deter {
     ///     initial_state: 'a',
-    ///     accepting_states: vec!['c', 'd', 'f'].into_iter().collect(),
+    ///     accepting_states: vec![
+    ///         'c',
+    ///         'd',
+    ///         'f',
+    ///     ].into_iter().collect(),
     ///     transitions: vec![
     ///         (('a', 0), 'b'),
     ///         (('a', 1), 'c'),
@@ -389,16 +584,16 @@ where
     }
 }
 
-impl<S, A> From<NonDeter<S, A>> for Deter<usize, A>
+impl<S, A> From<::NonDeter<S, A>> for Deter<usize, A>
 where
     S: Clone + Eq + Hash + ::std::fmt::Debug,
     A: Clone + Eq + Hash + ::std::fmt::Debug,
 {
-    fn from(non_deter: NonDeter<S, A>) -> Deter<usize, A> {
+    fn from(non_deter: ::NonDeter<S, A>) -> Deter<usize, A> {
         let states = non_deter.states();
         let labels = non_deter.labels();
 
-        let NonDeter {
+        let ::NonDeter {
             initial_states,
             accepting_states,
             transitions,
